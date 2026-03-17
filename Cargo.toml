@@ -1,0 +1,21 @@
+[package]
+name = "injectfmt"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["rust"]
+
+rust = ["dep:tree-sitter-rust"]
+markdown = ["dep:arborium-markdown"]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+ignore = "0.4.25"
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+
+tree-sitter = "0.26"
+tree-sitter-rust = { version = "0.24", optional = true }
+arborium-markdown = { version = "2.16", optional = true }
