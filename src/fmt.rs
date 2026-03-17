@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow, bail};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
 use crate::config::LanguageConfig;
@@ -57,59 +58,74 @@ pub fn injectfmt_str(src: &str, cfg: &LanguageConfig) -> Result<Option<String>> 
 
     matches.sort_unstable_by_key(|v| Reverse(v.start_byte()));
 
+    let outputs = matches
+        .into_par_iter()
+        .map(|v| {
+            let input = &src[v.byte_range()];
+
+            let mut child = Command::new(&cfg.format[0])
+                .args(&cfg.format[1..])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+
+            let mut stdin = child
+                .stdin
+                .take()
+                .ok_or_else(|| anyhow!("failed to acquire STDIN from child process"))?;
+
+            stdin.write_all(input.as_bytes())?;
+            stdin.flush()?;
+
+            drop(stdin);
+
+            let output = child.wait_with_output()?;
+
+            if !output.status.success() {
+                if output.stderr.is_empty() {
+                    bail!("Error from {}", &cfg.format[0]);
+                } else {
+                    let err = String::from_utf8(output.stderr)?;
+                    bail!("Error from {}: {err}", &cfg.format[0]);
+                }
+            }
+
+            let mut formatted = String::from_utf8(output.stdout)?;
+
+            if let Some((i, _)) = input
+                .char_indices()
+                .rev()
+                .take_while(|(_, v)| matches!(v, ' ' | '\t'))
+                .last()
+            {
+                formatted.push_str(&input[i..]);
+            }
+
+            let input_start = v.start_byte();
+
+            let start_idx = src[..input_start]
+                .char_indices()
+                .rev()
+                .take_while(|(_, v)| matches!(v, ' ' | '\t'))
+                .last()
+                .map(|(i, _)| i)
+                .unwrap_or(input_start);
+
+            Ok(if formatted != input || start_idx != input_start {
+                Some((start_idx..v.end_byte(), formatted))
+            } else {
+                None
+            })
+        })
+        .collect::<Vec<_>>();
+
     let mut new_src = None;
 
-    for v in matches {
-        let input = &src[v.byte_range()];
-
-        let mut child = Command::new(&cfg.format[0])
-            .args(&cfg.format[1..])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()?;
-
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| anyhow!("failed to acquire STDIN from child process"))?;
-
-        stdin.write_all(input.as_bytes())?;
-        stdin.flush()?;
-
-        drop(stdin);
-
-        let output = child.wait_with_output()?;
-
-        if !output.status.success() {
-            let err = String::from_utf8(output.stderr)?;
-            bail!("{err}");
-        }
-
-        let mut formatted = String::from_utf8(output.stdout)?;
-
-        if let Some((i, _)) = input
-            .char_indices()
-            .rev()
-            .take_while(|(_, v)| matches!(v, ' ' | '\t'))
-            .last()
-        {
-            formatted.push_str(&input[i..]);
-        }
-
-        let input_start = v.start_byte();
-
-        let start_idx = src[..input_start]
-            .char_indices()
-            .rev()
-            .take_while(|(_, v)| matches!(v, ' ' | '\t'))
-            .last()
-            .map(|(i, _)| i)
-            .unwrap_or(input_start);
-
-        if formatted != input || start_idx != input_start {
+    for v in outputs {
+        if let Some((range, formatted)) = v? {
             new_src
                 .get_or_insert_with(|| src.to_string())
-                .replace_range(start_idx..v.end_byte(), &formatted);
+                .replace_range(range, &formatted);
         }
     }
 
