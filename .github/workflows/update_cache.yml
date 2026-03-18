@@ -1,0 +1,16 @@
+name: Update cache
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  update-rust-cache:
+    uses: orcalabs/github-actions/.github/workflows/rust_build_cache.yml@master
+    secrets: inherit
+    with:
+      src-dir: .

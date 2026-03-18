@@ -1,0 +1,14 @@
+name: Update rust dependencies
+
+on:
+  schedule:
+    # Runs "At 05:00 on Monday." (see https://crontab.guru)
+    - cron: '0 5 * * 1'
+
+jobs:
+  update_dependencies:
+    uses: orcalabs/github-actions/.github/workflows/rust_update.yml@master
+    secrets: inherit
+    with:
+      src-dir: .
+      cargo-chef: false
