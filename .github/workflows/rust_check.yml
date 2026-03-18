@@ -1,0 +1,19 @@
+name: Rust Check
+
+concurrency:
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches:
+      - master
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-check:
+    uses: orcalabs/github-actions/.github/workflows/rust_verify.yml@master
+    secrets: inherit
+    with:
+      src-dir: .
