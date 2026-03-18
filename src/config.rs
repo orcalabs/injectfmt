@@ -45,17 +45,14 @@ impl Config {
 
 impl Language {
     pub fn extension(&self) -> &'static str {
-        #[cfg(any(feature = "rust", feature = "markdown"))]
-        return match self {
+        match self {
             #[cfg(feature = "rust")]
             Self::Rust => "rs",
             #[cfg(feature = "markdown")]
             Self::Markdown => "md",
-        };
 
-        #[allow(unreachable_code)]
-        {
-            panic!("no language features enabled");
+            #[allow(unreachable_patterns)]
+            _ => panic!("no language features enabled"),
         }
     }
 }
@@ -70,18 +67,14 @@ impl Deref for Config {
 
 impl From<Language> for tree_sitter::Language {
     fn from(value: Language) -> Self {
-        #[cfg(any(feature = "rust", feature = "markdown"))]
-        return match value {
+        match value {
             #[cfg(feature = "rust")]
-            Language::Rust => tree_sitter_rust::LANGUAGE,
+            Language::Rust => tree_sitter_rust::LANGUAGE.into(),
             #[cfg(feature = "markdown")]
-            Language::Markdown => arborium_markdown::language(),
-        }
-        .into();
+            Language::Markdown => arborium_markdown::language().into(),
 
-        #[allow(unreachable_code)]
-        {
-            panic!("no language features enabled");
+            #[allow(unreachable_patterns)]
+            _ => panic!("no language features enabled"),
         }
     }
 }
